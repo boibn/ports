@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>arctic</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        :root {
+            --glass-blur: 24px;
+            --cursor-ice: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M4 3v24l7-8 4 10 4-2-5-10 10-1z' fill='%23e8fbff' stroke='%23091b2b' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M23 3v9m-4-7 8 5m-8 0 8-5' fill='none' stroke='%234deaff' stroke-width='1.7' stroke-linecap='round'/%3E%3C/svg%3E") 3 3, auto;
+            --cursor-ice-pointer: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M4 3v24l7-8 4 10 4-2-5-10 10-1z' fill='%23ffffff' stroke='%23091b2b' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M23 3v9m-4-7 8 5m-8 0 8-5' fill='none' stroke='%2300d9ff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") 3 3, pointer;
+        }
+
+        body, body * {
+            cursor: var(--cursor-ice);
+        }
+
+        body button, body a, body summary, body label[for], body [role="button"], body [onclick], body input[type="submit"] {
+            cursor: var(--cursor-ice-pointer);
+        }
+
+        body input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), body textarea, body [contenteditable="true"] {
+            cursor: text;
+        }
+
+        body input[type="range"] {
+            cursor: ew-resize;
+        }
+        
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            overflow: hidden;
+            user-select: none;
+            background-color: #060b19;
+            color: #e2e8f0;
+        }
+
+        .glass-panel {
+            background: rgba(18, 30, 60, 0.35);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 12px 40px 0 rgba(0, 140, 255, 0.18), inset 0 0 25px rgba(255, 255, 255, 0.05);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .glass-panel:hover {
+            border-color: rgba(147, 197, 253, 0.35);
+            box-shadow: 0 16px 50px 0 rgba(0, 160, 255, 0.25), inset 0 0 30px rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-sidebar {
+            background: rgba(10, 18, 36, 0.55);
+            backdrop-filter: blur(calc(var(--glass-blur) * 1.25));
+            -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.25));
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-input {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(calc(var(--glass-blur) * 0.5));
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: all 0.3s ease;
+        }
+
+        .glass-input:focus {
+            background: rgba(255, 255, 255, 0.14);
+            border-color: rgba(147, 197, 253, 0.7);
+            box-shadow: 0 0 25px rgba(147, 197, 253, 0.4);
+        }
+
+        .glow-text {
+            text-shadow: 0 0 15px rgba(147, 197, 253, 0.7);
+        }
+
+        .glow-button {
+            transition: all 0.3s ease;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+        }
+
+        .glow-button:hover {
+            box-shadow: 0 0 30px rgba(96, 165, 250, 0.7);
+            transform: translateY(-2px);
+        }
+
+        .nav-btn {
+            transition: transform 180ms ease, background-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
+        }
+
+        .nav-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .nav-btn:active, .glow-button:active {
+            transform: scale(0.96);
+        }
+
+        #canvas-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .mono-font {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .view-content {
+            opacity: 0;
+            transform: translateY(12px);
+            transition: opacity 220ms ease, transform 220ms ease;
+            will-change: opacity, transform;
+        }
+
+        .view-content.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        @keyframes panelEnter {
+            from { opacity: 0; transform: translateY(14px) scale(0.99); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes tileEnter {
+            from { opacity: 0; transform: translateY(16px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes ambientDrift {
+            0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+            50% { transform: translate3d(12px, 10px, 0) scale(1.08); }
+        }
+
+        @keyframes snowflakeTurn {
+            to { transform: rotate(360deg); }
+        }
+
+        .view-content.is-visible > * {
+            animation: panelEnter 480ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+        }
+
+        .view-content.is-visible > *:nth-child(2) { animation-delay: 70ms; }
+        .view-content.is-visible > *:nth-child(3) { animation-delay: 140ms; }
+
+        #view-home .fa-snowflake {
+            animation: snowflakeTurn 24s linear infinite;
+        }
+
+        #view-home .blur-3xl {
+            animation: ambientDrift 12s ease-in-out infinite;
+        }
+
+        #view-home .blur-3xl:nth-of-type(2) {
+            animation-delay: -6s;
+            animation-duration: 16s;
+        }
+
+        .game-card {
+            transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+        }
+
+        .game-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(147, 197, 253, 0.4);
+            box-shadow: 0 16px 42px rgba(0, 120, 220, 0.2), inset 0 0 26px rgba(255, 255, 255, 0.06);
+        }
+
+        .game-card-image {
+            display: block;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .game-card-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 300ms ease;
+        }
+
+        .game-card-image:hover img {
+            transform: scale(1.06);
+        }
+
+        .game-card-image::after {
+            content: "";
+            position: absolute;
+            inset: 45% 0 0;
+            background: linear-gradient(transparent, rgba(4, 12, 26, 0.88));
+            opacity: 0;
+            transition: opacity 180ms ease;
+        }
+
+        .game-card-image:hover::after,
+        .game-card-image:focus-visible::after {
+            opacity: 1;
+        }
+
+        .game-card-image-label {
+            position: absolute;
+            z-index: 1;
+            right: 14px;
+            bottom: 14px;
+            left: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: white;
+            font-weight: 700;
+            opacity: 0;
+            transform: translateY(5px);
+            transition: opacity 180ms ease, transform 180ms ease;
+        }
+
+        .game-card-image:hover .game-card-image-label,
+        .game-card-image:focus-visible .game-card-image-label {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .game-player-frame {
+            display: block;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            min-height: 320px;
+            border: 0;
+            background: #050914;
+        }
+
+        @media (max-width: 640px) {
+            .game-player-frame {
+                aspect-ratio: 4 / 3;
+                min-height: 260px;
+            }
+        }
+
+        #view-games.is-visible .game-card {
+            animation: tileEnter 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+        }
+
+        #view-games.is-visible .game-card:nth-child(4n + 1) { animation-delay: 40ms; }
+        #view-games.is-visible .game-card:nth-child(4n + 2) { animation-delay: 80ms; }
+        #view-games.is-visible .game-card:nth-child(4n + 3) { animation-delay: 120ms; }
+        #view-games.is-visible .game-card:nth-child(4n) { animation-delay: 160ms; }
+
+        .game-filter.is-active {
+            color: #07111e;
+            background: #67e8f9;
+            border-color: #67e8f9;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                scroll-behavior: auto !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex">
+
+    <div id="canvas-bg"></div>
+
+    <aside class="glass-sidebar w-20 flex flex-col items-center py-6 justify-between z-20 shrink-0">
+        <div class="flex flex-col items-center space-y-8 w-full">
+            <!-- Brand Logo -->
+            <div class="w-12 h-12 rounded-2xl glass-panel flex items-center justify-center text-blue-300 glow-text cursor-pointer hover:scale-105 transition-transform" onclick="switchTab('home')">
+                <i class="fa-solid fa-snowflake text-xl animate-spin-slow"></i>
+            </div>
+
+            <!-- Nav Icons -->
+            <nav class="flex flex-col space-y-4 w-full px-3">
+                <button onclick="switchTab('home')" id="nav-home" class="nav-btn w-full h-12 rounded-xl flex items-center justify-center text-blue-200 bg-blue-500/20 border border-blue-400/30 transition-all group relative" title="Home">
+                    <i class="fa-solid fa-house text-lg"></i>
+                    <span class="absolute left-20 bg-slate-900/90 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-lg border border-white/10">Home</span>
+                </button>
+                <button onclick="switchTab('games')" id="nav-games" class="nav-btn w-full h-12 rounded-xl flex items-center justify-center text-slate-400 hover:text-blue-200 hover:bg-white/10 transition-all group relative" title="Games">
+                    <i class="fa-solid fa-gamepad text-lg"></i>
+                    <span class="absolute left-20 bg-slate-900/90 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-lg border border-white/10">Games</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Settings Icon -->
+        <button onclick="switchTab('settings')" id="nav-settings" class="nav-btn w-12 h-12 rounded-xl flex items-center justify-center text-slate-400 hover:text-blue-200 hover:bg-white/10 transition-all group relative" title="Settings">
+            <i class="fa-solid fa-gear text-lg"></i>
+            <span class="absolute left-20 bg-slate-900/90 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-lg border border-white/10">Settings</span>
+        </button>
+    </aside>
+
+    <main class="flex-1 h-full overflow-y-auto p-6 lg:p-10 flex flex-col justify-center items-center z-10 relative">
+        
+        <!-- HOME TAB VIEW -->
+        <div id="view-home" class="view-content is-visible w-full max-w-4xl space-y-6 animate-fadeIn">
+            <!-- Main Search Card -->
+            <div class="glass-panel rounded-3xl p-8 relative overflow-hidden">
+                <!-- Glowing ambient background orb inside card -->
+                <div class="absolute -top-24 -right-24 w-72 h-72 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
+                <div class="absolute -bottom-24 -left-24 w-72 h-72 bg-cyan-400/20 rounded-full blur-3xl pointer-events-none"></div>
+
+                <!-- Card Header -->
+                <div class="flex items-center justify-between mb-8">
+                    <div class="flex items-center space-x-3">
+                        <div class="text-blue-300 text-2xl glow-text">
+                            <i class="fa-solid fa-snowflake"></i>
+                        </div>
+                        <h1 class="text-3xl font-bold tracking-wider text-white glow-text">arctic</h1>
+                    </div>
+                    <div id="live-clock" class="mono-font text-xl text-blue-200 tracking-wider bg-white/5 px-4 py-2 rounded-2xl border border-white/10 shadow-inner">
+                        9:05:26 PM
+                    </div>
+                </div>
+
+                <!-- Search Input Form -->
+                <form onsubmit="handleSearch(event)" class="relative mb-6">
+                    <div class="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none text-blue-300">
+                        <i class="fa-solid fa-magnifying-glass text-lg"></i>
+                    </div>
+                    <input type="text" id="search-input" placeholder="Search the web or enter a link" 
+                           class="glass-input w-full py-4 pl-14 pr-16 rounded-2xl text-white placeholder-blue-300/50 text-lg outline-none">
+                    <button type="submit" class="absolute inset-y-2 right-2 px-5 bg-blue-600/80 hover:bg-blue-500 text-white rounded-xl flex items-center justify-center glow-button transition-all">
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </form>
+
+                <!-- MOTD Banner -->
+                <div class="text-sm text-blue-200/80 mb-6 mono-font bg-white/5 px-4 py-2.5 rounded-xl border border-white/10 flex items-center space-x-2">
+                    <span class="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                    <span>motd: im working on a link for arctic, hosted on canvas</span>
+                </div>
+
+                <!-- Discord Button -->
+                <button onclick="openDiscord()" class="w-full sm:w-auto px-6 py-3.5 bg-blue-600/70 hover:bg-blue-500 text-white font-medium rounded-2xl glow-button flex items-center justify-center space-x-2 border border-blue-400/30">
+                    <i class="fa-brands fa-discord text-lg"></i>
+                    <span>join the discord for more links!</span>
+                </button>
+            </div>
+
+            <!-- Bottom Cards Grid (No Quick Links) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Games Card -->
+                <div onclick="switchTab('games')" class="glass-panel rounded-3xl p-6 cursor-pointer group flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-14 h-14 rounded-2xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300 text-2xl group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-gamepad"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-white group-hover:text-blue-300 transition-colors">G@mes</h3>
+                            <p class="text-sm text-blue-200/60 mono-font">1k+ g@mes</p>
+                        </div>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-blue-300 group-hover:translate-x-1 transition-transform">
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </div>
+                </div>
+
+                <!-- Open Cloaked Card -->
+                <div class="glass-panel rounded-3xl p-6 flex flex-col justify-between">
+                    <div class="mb-4">
+                        <div class="text-xs uppercase tracking-wider text-blue-300 font-semibold mb-1">Open cloaked</div>
+                        <p class="text-xs text-blue-200/70 leading-relaxed">Launch Arctic in a new tab, then send this tab to your chosen redirect site so it's not left showing Arctic.</p>
+                    </div>
+                    <button onclick="openCloaked()" class="glass-input hover:bg-white/20 py-2.5 px-4 rounded-xl text-blue-200 text-sm font-medium flex items-center justify-center space-x-2 transition-all">
+                        <i class="fa-solid fa-up-right-from-square"></i>
+                        <span>about:blank</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- GAMES TAB VIEW -->
+        <div id="view-games" class="view-content hidden w-full max-w-4xl h-[82vh] flex flex-col space-y-6 overflow-y-auto pr-2">
+            <section class="glass-panel shrink-0 rounded-3xl p-8 relative overflow-hidden">
+                <div class="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-500/15 blur-3xl pointer-events-none"></div>
+                <div class="absolute -bottom-28 -left-20 h-64 w-64 rounded-full bg-cyan-400/15 blur-3xl pointer-events-none"></div>
+                <div class="relative">
+                    <div class="flex items-center justify-between gap-4 mb-7">
+                        <div class="flex items-center space-x-3">
+                            <div class="text-blue-300 text-2xl glow-text"><i class="fa-solid fa-snowflake"></i></div>
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-wider text-blue-300">Arctic / Arcade</p>
+                                <h1 class="text-3xl font-bold tracking-wider text-white glow-text">Game vault</h1>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-gamepad hidden sm:block text-3xl text-blue-200/40" aria-hidden="true"></i>
+                    </div>
+                    <p class="mb-5 text-sm text-blue-200/70">Find a favorite and jump back into the action.</p>
+                    <label class="relative block">
+                        <span class="sr-only">Search games</span>
+                        <i class="fa-solid fa-magnifying-glass absolute inset-y-0 left-5 flex items-center text-blue-300" aria-hidden="true"></i>
+                        <input id="game-search" type="search" placeholder="Search the game library" class="glass-input w-full rounded-2xl py-4 pl-14 pr-5 text-lg text-white placeholder-blue-300/50 outline-none" autocomplete="off">
+                    </label>
+                    <div class="mt-5 flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-blue-200/80 mono-font">
+                        <span class="inline-block h-2 w-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                        <span>Arcade classics, quick picks, and new challenges</span>
+                        <span id="game-count" class="ml-auto whitespace-nowrap text-blue-200"></span>
+                    </div>
+                </div>
+            </section>
+
+            <div class="flex shrink-0 flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Filter games by category">
+                    <span class="mr-1 text-xs font-semibold uppercase tracking-wider text-blue-200/50">Browse</span>
+                    <button class="game-filter is-active rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-slate-300 transition-colors" data-category="All">All games</button>
+                    <button class="game-filter rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-cyan-200/40 hover:text-white" data-category="Arcade">Arcade</button>
+                    <button class="game-filter rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-cyan-200/40 hover:text-white" data-category="Sports">Sports</button>
+                    <button class="game-filter rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-cyan-200/40 hover:text-white" data-category="Racing">Racing</button>
+                    <button class="game-filter rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-cyan-200/40 hover:text-white" data-category="Puzzle">Puzzle</button>
+                </div>
+            </div>
+
+            <section id="game-player" class="glass-panel hidden shrink-0 overflow-hidden rounded-3xl" aria-label="Game player">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-white/5 px-4 py-3 sm:px-5">
+                    <div class="flex min-w-0 items-center gap-3">
+                        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-400/30 bg-blue-500/20 text-blue-200"><i class="fa-solid fa-gamepad" aria-hidden="true"></i></div>
+                        <div class="min-w-0">
+                            <h2 id="game-player-title" class="truncate text-sm font-bold text-white">Game</h2>
+                            <p class="text-xs text-blue-200/60">Arctic Arcade</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button id="game-favorite" type="button" class="h-9 w-9 rounded-lg border border-white/10 bg-white/5 text-slate-300 transition-colors hover:border-rose-300/40 hover:text-rose-300" aria-label="Add game to favorites" aria-pressed="false" title="Favorite">
+                            <i class="fa-regular fa-heart" aria-hidden="true"></i>
+                        </button>
+                        <button id="game-reload" type="button" class="h-9 w-9 rounded-lg border border-white/10 bg-white/5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white" aria-label="Reload game" title="Reload game">
+                            <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+                        </button>
+                        <button id="game-fullscreen" type="button" class="h-9 w-9 rounded-lg border border-white/10 bg-white/5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white" aria-label="Enter fullscreen" title="Fullscreen">
+                            <i class="fa-solid fa-expand" aria-hidden="true"></i>
+                        </button>
+                        <button id="game-close" type="button" class="h-9 w-9 rounded-lg border border-white/10 bg-white/5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white" aria-label="Close game" title="Close game">
+                            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+                <iframe id="game-player-frame" class="game-player-frame" title="Game player" allow="fullscreen; autoplay; gamepad"></iframe>
+            </section>
+
+            <div id="game-grid" class="grid shrink-0 grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4" aria-live="polite"></div>
+        </div>
+
+        <!-- SETTINGS TAB VIEW -->
+        <div id="view-settings" class="view-content hidden w-full max-w-4xl h-[82vh] flex flex-col space-y-6 overflow-y-auto pr-2">
+            <header class="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-5">
+                <div>
+                    <div class="mb-2 text-xs font-semibold uppercase tracking-widest text-cyan-200">Personalize</div>
+                    <h2 class="text-3xl font-bold text-white">Settings</h2>
+                    <p class="mt-1 text-sm text-slate-400">Tune the atmosphere and interface.</p>
+                </div>
+                <button id="settings-reset" type="button" class="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-white/10 hover:text-white">
+                    <i class="fa-solid fa-rotate-left mr-2" aria-hidden="true"></i>Reset defaults
+                </button>
+            </header>
+
+            <section class="space-y-3">
+                <h3 class="px-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Atmosphere</h3>
+                <div class="glass-panel rounded-2xl p-5 sm:p-6">
+                    <div class="flex flex-wrap items-center justify-between gap-5">
+                        <div>
+                            <label for="setting-snow-count" class="font-semibold text-white">Snowfall density</label>
+                            <p class="mt-1 text-xs text-slate-400">Choose how many particles drift through the background.</p>
+                        </div>
+                        <output id="setting-snow-count-value" for="setting-snow-count" class="mono-font min-w-24 text-right text-sm text-cyan-200">800 flakes</output>
+                    </div>
+                    <input id="setting-snow-count" type="range" min="100" max="1500" step="50" value="800" class="mt-5 w-full accent-cyan-300" aria-label="Snowfall density">
+                </div>
+                <div class="glass-panel rounded-2xl p-5 sm:p-6 flex items-center justify-between gap-5">
+                    <div>
+                        <label for="setting-snow-toggle" class="font-semibold text-white">Snowfall animation</label>
+                        <p class="mt-1 text-xs text-slate-400">Pause moving particles without changing density.</p>
+                    </div>
+                    <label class="relative inline-flex shrink-0 items-center cursor-pointer" aria-label="Toggle snowfall animation">
+                        <input id="setting-snow-toggle" type="checkbox" class="sr-only peer" checked>
+                        <span class="h-6 w-11 rounded-full bg-white/10 transition-colors peer-checked:bg-cyan-500 peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-200 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-transform peer-checked:after:translate-x-5"></span>
+                    </label>
+                </div>
+            </section>
+
+            <section class="space-y-3">
+                <h3 class="px-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Appearance</h3>
+                <div class="glass-panel rounded-2xl p-5 sm:p-6">
+                    <div class="flex flex-wrap items-center justify-between gap-5">
+                        <div>
+                            <label for="setting-glass-blur" class="font-semibold text-white">Glass blur</label>
+                            <p class="mt-1 text-xs text-slate-400">Adjust the frost across panels, fields, and the sidebar.</p>
+                        </div>
+                        <output id="setting-glass-blur-value" for="setting-glass-blur" class="mono-font min-w-16 text-right text-sm text-cyan-200">24 px</output>
+                    </div>
+                    <input id="setting-glass-blur" type="range" min="0" max="40" step="1" value="24" class="mt-5 w-full accent-cyan-300" aria-label="Glass blur strength">
+                </div>
+            </section>
+        </div>
+
+    </main>
+
+    <script>
+        // Live Clock updater
+        function updateClock() {
+            const now = new Date();
+            let hours = now.getHours();
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12;
+            const timeString = `${hours}:${minutes}:${seconds} ${ampm}`;
+            const clockEl = document.getElementById('live-clock');
+            if (clockEl) clockEl.textContent = timeString;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        function getStoredSetting(key, fallback, min, max) {
+            const stored = Number(localStorage.getItem(key));
+            return Number.isFinite(stored) && stored >= min && stored <= max ? stored : fallback;
+        }
+
+        let snowParticleCount = getStoredSetting('arctic-snow-count', 800, 100, 1500);
+        let snowfallEnabled = localStorage.getItem('arctic-snow-enabled') !== 'false';
+        let glassBlurAmount = getStoredSetting('arctic-glass-blur', 24, 0, 40);
+        let snowParticleSystem = null;
+
+        const snowCountControl = document.getElementById('setting-snow-count');
+        const snowCountOutput = document.getElementById('setting-snow-count-value');
+        const snowfallControl = document.getElementById('setting-snow-toggle');
+        const glassBlurControl = document.getElementById('setting-glass-blur');
+        const glassBlurOutput = document.getElementById('setting-glass-blur-value');
+
+        function applySnowSettings() {
+            snowCountControl.value = snowParticleCount;
+            snowCountOutput.textContent = `${snowParticleCount.toLocaleString()} flakes`;
+            snowfallControl.checked = snowfallEnabled;
+            if (snowParticleSystem) {
+                snowParticleSystem.visible = snowfallEnabled;
+                snowParticleSystem.geometry.setDrawRange(0, snowParticleCount);
+            }
+        }
+
+        function applyGlassBlur() {
+            glassBlurControl.value = glassBlurAmount;
+            glassBlurOutput.textContent = `${glassBlurAmount} px`;
+            document.documentElement.style.setProperty('--glass-blur', `${glassBlurAmount}px`);
+        }
+
+        applySnowSettings();
+        applyGlassBlur();
+
+        snowCountControl.addEventListener('input', () => {
+            snowParticleCount = Number(snowCountControl.value);
+            localStorage.setItem('arctic-snow-count', snowParticleCount);
+            applySnowSettings();
+        });
+
+        snowfallControl.addEventListener('change', () => {
+            snowfallEnabled = snowfallControl.checked;
+            localStorage.setItem('arctic-snow-enabled', snowfallEnabled);
+            applySnowSettings();
+        });
+
+        glassBlurControl.addEventListener('input', () => {
+            glassBlurAmount = Number(glassBlurControl.value);
+            localStorage.setItem('arctic-glass-blur', glassBlurAmount);
+            applyGlassBlur();
+        });
+
+        document.getElementById('settings-reset').addEventListener('click', () => {
+            localStorage.removeItem('arctic-snow-count');
+            localStorage.removeItem('arctic-snow-enabled');
+            localStorage.removeItem('arctic-glass-blur');
+            snowParticleCount = 800;
+            snowfallEnabled = true;
+            glassBlurAmount = 24;
+            applySnowSettings();
+            applyGlassBlur();
+        });
+
+        // Tab Switching Logic
+        function switchTab(tabName) {
+            const targetView = document.getElementById(`view-${tabName}`);
+            if (!targetView) return;
+
+            document.querySelectorAll('.view-content').forEach(view => {
+                if (view === targetView || view.classList.contains('hidden')) return;
+                view.classList.remove('is-visible');
+                window.setTimeout(() => {
+                    if (!view.classList.contains('is-visible')) view.classList.add('hidden');
+                }, 220);
+            });
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-500/20', 'border', 'border-blue-400/30', 'text-blue-200');
+                btn.classList.add('text-slate-400');
+            });
+            
+            if (targetView.classList.contains('hidden')) {
+                targetView.classList.remove('hidden');
+                requestAnimationFrame(() => targetView.classList.add('is-visible'));
+            }
+            
+            const targetBtn = document.getElementById(`nav-${tabName}`);
+            if (targetBtn) {
+                targetBtn.classList.remove('text-slate-400');
+                targetBtn.classList.add('bg-blue-500/20', 'border', 'border-blue-400/30', 'text-blue-200');
+            }
+        }
+
+        const sampleGames = [
+            { name: 'Retro Bowl', cat: 'Sports', icon: 'fa-football', color: 'text-orange-200', accent: 'from-orange-400/20' },
+            { name: 'Slope', cat: 'Arcade', icon: 'fa-mountain', color: 'text-cyan-200', accent: 'from-cyan-400/20' },
+            { name: '1v1.LOL', cat: 'Shooter', icon: 'fa-crosshairs', color: 'text-rose-200', accent: 'from-rose-400/20' },
+            { name: 'Geometry Dash', cat: 'Platformer', icon: 'fa-cube', color: 'text-violet-200', accent: 'from-violet-400/20' },
+            { name: 'Cookie Clicker', cat: 'Idle', icon: 'fa-cookie', color: 'text-amber-200', accent: 'from-amber-400/20' },
+            { name: 'Basketball Legends', cat: 'Sports', icon: 'fa-basketball', color: 'text-orange-200', accent: 'from-orange-400/20' },
+            { name: 'Moto X3M', cat: 'Racing', icon: 'fa-motorcycle', color: 'text-lime-200', accent: 'from-lime-400/20' },
+            { name: 'Subway Surfers', cat: 'Runner', icon: 'fa-person-running', color: 'text-yellow-200', accent: 'from-yellow-400/20' },
+            { name: 'Tetris', cat: 'Puzzle', icon: 'fa-chess-board', color: 'text-sky-200', accent: 'from-sky-400/20' },
+            { name: 'Among Us', cat: 'Action', icon: 'fa-user-astronaut', color: 'text-pink-200', accent: 'from-pink-400/20' },
+            { name: 'Drift Hunters', cat: 'Racing', icon: 'fa-car-side', color: 'text-lime-200', accent: 'from-lime-400/20' },
+            { name: 'Happy Wheels', cat: 'Physics', icon: 'fa-person-wheelchair', color: 'text-emerald-200', accent: 'from-emerald-400/20' },
+            { name: 'Pac-Man', cat: 'Arcade', icon: 'fa-ghost', color: 'text-yellow-200', accent: 'from-yellow-400/20' },
+            { name: 'Space Invaders', cat: 'Arcade', icon: 'fa-rocket', color: 'text-green-200', accent: 'from-green-400/20' },
+            { name: 'Asteroids', cat: 'Arcade', icon: 'fa-meteor', color: 'text-slate-200', accent: 'from-slate-400/20' },
+            { name: 'Flappy Bird', cat: 'Arcade', icon: 'fa-dove', color: 'text-sky-200', accent: 'from-sky-400/20' },
+            { name: 'Doodle Jump', cat: 'Arcade', icon: 'fa-arrow-up', color: 'text-lime-200', accent: 'from-lime-400/20' },
+            { name: 'Crossy Road', cat: 'Arcade', icon: 'fa-road', color: 'text-orange-200', accent: 'from-orange-400/20' },
+            { name: 'Sudoku', cat: 'Puzzle', icon: 'fa-border-all', color: 'text-cyan-200', accent: 'from-cyan-400/20' },
+            { name: '2048', cat: 'Puzzle', icon: 'fa-table-cells', color: 'text-amber-200', accent: 'from-amber-400/20' },
+            { name: 'Minesweeper', cat: 'Puzzle', icon: 'fa-bomb', color: 'text-red-200', accent: 'from-red-400/20' },
+            { name: 'Connect Four', cat: 'Puzzle', icon: 'fa-circle-dot', color: 'text-rose-200', accent: 'from-rose-400/20' },
+            { name: 'Chess', cat: 'Puzzle', icon: 'fa-chess-knight', color: 'text-slate-200', accent: 'from-slate-400/20' },
+            { name: 'Soccer Skills', cat: 'Sports', icon: 'fa-futbol', color: 'text-emerald-200', accent: 'from-emerald-400/20' },
+            { name: 'Boxing Random', cat: 'Sports', icon: 'fa-hand-fist', color: 'text-red-200', accent: 'from-red-400/20' },
+            { name: 'Golf Orbit', cat: 'Sports', icon: 'fa-golf-ball-tee', color: 'text-lime-200', accent: 'from-lime-400/20' },
+            { name: 'Drive Mad', cat: 'Racing', icon: 'fa-truck-monster', color: 'text-orange-200', accent: 'from-orange-400/20' },
+            { name: 'Madalin Stunt Cars', cat: 'Racing', icon: 'fa-car', color: 'text-cyan-200', accent: 'from-cyan-400/20' },
+            { name: 'Parking Fury', cat: 'Racing', icon: 'fa-square-parking', color: 'text-yellow-200', accent: 'from-yellow-400/20' },
+            { name: 'Highway Traffic', cat: 'Racing', icon: 'fa-road', color: 'text-sky-200', accent: 'from-sky-400/20' },
+            { name: 'Tank Trouble', cat: 'Action', icon: 'fa-tank', color: 'text-green-200', accent: 'from-green-400/20' },
+            { name: 'Bob the Robber', cat: 'Action', icon: 'fa-user-secret', color: 'text-violet-200', accent: 'from-violet-400/20' },
+            { name: 'Stickman Hook', cat: 'Platformer', icon: 'fa-person-falling', color: 'text-pink-200', accent: 'from-pink-400/20' },
+            { name: 'Run 3', cat: 'Runner', icon: 'fa-person-running', color: 'text-blue-200', accent: 'from-blue-400/20' },
+            { name: 'Web Dashers', cat: 'Arcade', image: 'https://cdn.jsdelivr.net/gh/boibn/port-images@main/geo.png', url: 'https://cdn.jsdelivr.net/gh/boibn/ports@main/785-upd3.html' },
+            { name: 'Cover Pit', cat: 'Arcade', url: 'https://cdn.jsdelivr.net/gh/boibn/ports@main/716-fix2.html' }
+        ];
+
+        const gamePlayer = document.getElementById('game-player');
+        const gamePlayerFrame = document.getElementById('game-player-frame');
+        const gameFavoriteButton = document.getElementById('game-favorite');
+        const favoriteGames = new Set(JSON.parse(localStorage.getItem('arctic-favorite-games') || '[]'));
+        let currentGame = null;
+
+        function updateGameFavorite() {
+            const gameName = currentGame?.name || 'Game';
+            const isFavorite = favoriteGames.has(gameName);
+            gameFavoriteButton.setAttribute('aria-pressed', String(isFavorite));
+            gameFavoriteButton.setAttribute('aria-label', `${isFavorite ? 'Remove' : 'Add'} ${gameName} ${isFavorite ? 'from' : 'to'} favorites`);
+            gameFavoriteButton.title = isFavorite ? 'Remove favorite' : 'Add to favorites';
+            gameFavoriteButton.innerHTML = `<i class="fa-${isFavorite ? 'solid text-rose-300' : 'regular'} fa-heart" aria-hidden="true"></i>`;
+        }
+
+        function loadCurrentGame() {
+            if (!currentGame) return;
+            const url = currentGame.url;
+            gamePlayerFrame.srcdoc = '<!DOCTYPE html><html><body><script>fetch("' + url + '").then(r=>r.text()).then(t=>{document.open();document.write(t);document.close()})<\\/script></body></html>';
+            gamePlayerFrame.title = currentGame.name;
+        }
+
+        function openGame(game) {
+            if (!game?.url) return;
+            currentGame = game;
+            document.getElementById('game-player-title').textContent = game.name;
+            gamePlayer.classList.remove('hidden');
+            loadCurrentGame();
+            updateGameFavorite();
+            gamePlayer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        gameFavoriteButton.addEventListener('click', () => {
+            if (!currentGame) return;
+            if (favoriteGames.has(currentGame.name)) favoriteGames.delete(currentGame.name);
+            else favoriteGames.add(currentGame.name);
+            localStorage.setItem('arctic-favorite-games', JSON.stringify([...favoriteGames]));
+            updateGameFavorite();
+        });
+
+        document.getElementById('game-reload').addEventListener('click', loadCurrentGame);
+        document.getElementById('game-fullscreen').addEventListener('click', async () => {
+            try {
+                if (document.fullscreenElement) await document.exitFullscreen();
+                else await gamePlayer.requestFullscreen();
+            } catch (error) {
+                console.error('Could not enter fullscreen:', error);
+            }
+        });
+        document.getElementById('game-close').addEventListener('click', () => {
+            gamePlayerFrame.srcdoc = '';
+            gamePlayer.classList.add('hidden');
+            currentGame = null;
+        });
+        document.addEventListener('fullscreenchange', () => {
+            const isFullscreen = document.fullscreenElement === gamePlayer;
+            document.getElementById('game-fullscreen').setAttribute('aria-label', isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen');
+            document.getElementById('game-fullscreen').title = isFullscreen ? 'Exit fullscreen' : 'Fullscreen';
+            document.querySelector('#game-fullscreen i').className = `fa-solid fa-${isFullscreen ? 'compress' : 'expand'}`;
+        });
+        updateGameFavorite();
+
+        let activeGameCategory = 'All';
+
+        function renderGames() {
+            const grid = document.getElementById('game-grid');
+            if (!grid) return;
+            const query = document.getElementById('game-search').value.trim().toLowerCase();
+            const filteredGames = sampleGames.filter(game => {
+                const matchesCategory = activeGameCategory === 'All' || game.cat === activeGameCategory;
+                return matchesCategory && game.name.toLowerCase().includes(query);
+            });
+
+            grid.innerHTML = filteredGames.map(game => game.url && game.image
+                ? `<button class="game-card game-card-image glass-panel aspect-square rounded-3xl w-full cursor-pointer" type="button" data-game-name="${game.name}" aria-label="Play ${game.name}"><img src="${game.image}" alt=""><span class="game-card-image-label"><span>${game.name}</span><i class="fa-solid fa-play" aria-hidden="true"></i></span></button>`
+                : game.url
+                    ? `<button class="game-card glass-panel aspect-square rounded-3xl" type="button" data-game-name="${game.name}" aria-label="Play ${game.name}"></button>`
+                    : `<article class="game-card glass-panel aspect-square rounded-3xl" aria-label="${game.name}, ${game.cat}"></article>`
+            ).join('');
+            grid.querySelectorAll('[data-game-name]').forEach(card => {
+                card.addEventListener('click', () => openGame(sampleGames.find(game => game.name === card.dataset.gameName)));
+            });
+            document.getElementById('game-count').textContent = `${filteredGames.length} ${filteredGames.length === 1 ? 'game' : 'games'}`;
+        }
+
+        document.getElementById('game-search').addEventListener('input', renderGames);
+        document.querySelectorAll('.game-filter').forEach(button => {
+            button.addEventListener('click', () => {
+                activeGameCategory = button.dataset.category;
+                document.querySelectorAll('.game-filter').forEach(filter => filter.classList.toggle('is-active', filter === button));
+                renderGames();
+            });
+        });
+        renderGames();
+
+        // Search action
+        function handleSearch(e) {
+            e.preventDefault();
+            const query = document.getElementById('search-input').value;
+            if (!query) return;
+            if (query.startsWith('http://') || query.startsWith('https://') || query.includes('.')) {
+                const url = query.startsWith('http') ? query : 'https://' + query;
+                window.open(url, '_blank');
+            } else {
+                window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank');
+            }
+        }
+
+        // Discord link
+        function openDiscord() {
+            window.open('https://discord.com', '_blank');
+        }
+
+        // About:Blank Cloaker
+        function openCloaked() {
+            const win = window.open('about:blank', '_blank');
+            if (win) {
+                win.document.write(`
+                    <!DOCTYPE html>
+                    <html lang="en">
+                    <head>
+                        <title>Google Drive</title>
+                        <link rel="icon" href="https://ssl.gstatic.com/docs/documents/images/kix-favicon7.ico">
+                        <style>
+                            body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #060b19; }
+                            iframe { width: 100%; height: 100%; border: none; }
+                        </style>
+                    </head>
+                    <body>
+                        <iframe src="${window.location.href}"></iframe>
+                    </body>
+                    </html>
+                `);
+                win.document.close();
+            }
+        }
+
+        // Three.js Background Shader & Glowing Snow Particles Simulation
+        window.onload = function () {
+            const container = document.getElementById('canvas-bg');
+            const scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x060b19, 0.002);
+
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 400;
+
+            const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            // Create glowing snow particles
+            const maxParticleCount = 1500;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(maxParticleCount * 3);
+            const velocities = new Float32Array(maxParticleCount * 3);
+
+            for (let i = 0; i < maxParticleCount * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 1200;
+                positions[i + 1] = (Math.random() - 0.5) * 1200;
+                positions[i + 2] = (Math.random() - 0.5) * 800;
+
+                velocities[i] = (Math.random() - 0.5) * 0.5;
+                velocities[i + 1] = -Math.random() * 1.5 - 0.5; // Falling down
+                velocities[i + 2] = (Math.random() - 0.5) * 0.5;
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setDrawRange(0, snowParticleCount);
+
+            // Create circular glowing sprite texture procedurally
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            gradient.addColorStop(0.3, 'rgba(147, 197, 253, 0.8)');
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 64, 64);
+
+            const texture = new THREE.CanvasTexture(canvas);
+
+            const material = new THREE.PointsMaterial({
+                size: 8,
+                map: texture,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+
+            const particleSystem = new THREE.Points(geometry, material);
+            snowParticleSystem = particleSystem;
+            particleSystem.visible = snowfallEnabled;
+            scene.add(particleSystem);
+
+            // Mouse interaction parallax
+            let mouseX = 0;
+            let mouseY = 0;
+            window.addEventListener('mousemove', (e) => {
+                mouseX = (e.clientX - window.innerWidth / 2) * 0.1;
+                mouseY = (e.clientY - window.innerHeight / 2) * 0.1;
+            });
+
+            // Animation Loop
+            function animate() {
+                requestAnimationFrame(animate);
+
+                if (particleSystem.visible) {
+                    const posArr = geometry.attributes.position.array;
+                    for (let i = 0; i < snowParticleCount * 3; i += 3) {
+                        posArr[i] += velocities[i];
+                        posArr[i + 1] += velocities[i + 1];
+                        posArr[i + 2] += velocities[i + 2];
+
+                        if (posArr[i + 1] < -600) {
+                            posArr[i + 1] = 600;
+                            posArr[i] = (Math.random() - 0.5) * 1200;
+                        }
+                    }
+                    geometry.attributes.position.needsUpdate = true;
+                }
+
+                camera.position.x += (mouseX - camera.position.x) * 0.05;
+                camera.position.y += (-mouseY - camera.position.y) * 0.05;
+                camera.lookAt(scene.position);
+
+                renderer.render(scene, camera);
+            }
+            animate();
+
+            // Window resize handler
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        };
+    </script>
+</body>
+</html>
